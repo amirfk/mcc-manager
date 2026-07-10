@@ -210,6 +210,38 @@ exports.handler = async (event) => {
       operation = { updateMask: "status", update: { resourceName: `customers/${customerId}/assetGroups/${assetGroupId}`, status } };
       preview = { target: `asset group ${assetGroupId} (${current.name})`, field: "status", old: current.status, new: status };
 
+    } else if (action === "set_target_cpa") {
+      const campaignId = digits(req.campaignId);
+      const amount = Number(req.amount);
+      if (!campaignId) return json(400, { ok: false, error: "Missing 'campaignId'" });
+      if (!(amount > 0)) return json(400, { ok: false, error: "'amount' (target CPA in dollars) must be a positive number" });
+      const amountMicros = String(Math.round(amount * 1e6));
+
+      const rows = await search(env, access, customerId,
+        `SELECT campaign.id, campaign.name, campaign.bidding_strategy_type, campaign.bidding_strategy, campaign.target_cpa.target_cpa_micros, campaign.maximize_conversions.target_cpa_micros FROM campaign WHERE campaign.id = ${campaignId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Campaign ${campaignId} not found in ${customerId}` });
+      const c = rows[0].campaign;
+
+      // Portfolio/shared strategies must be edited on the strategy resource, not the campaign.
+      if (c.biddingStrategy) return json(409, { ok: false, error: `Campaign ${campaignId} uses a shared/portfolio bidding strategy. Edit the strategy directly, not the campaign.` });
+
+      let maskPath, updateBody, oldMicros;
+      if (c.biddingStrategyType === "MAXIMIZE_CONVERSIONS") {
+        maskPath = "maximize_conversions.target_cpa_micros";
+        updateBody = { resourceName: `customers/${customerId}/campaigns/${campaignId}`, maximizeConversions: { targetCpaMicros: amountMicros } };
+        oldMicros = c.maximizeConversions?.targetCpaMicros ?? null;
+      } else if (c.biddingStrategyType === "TARGET_CPA") {
+        maskPath = "target_cpa.target_cpa_micros";
+        updateBody = { resourceName: `customers/${customerId}/campaigns/${campaignId}`, targetCpa: { targetCpaMicros: amountMicros } };
+        oldMicros = c.targetCpa?.targetCpaMicros ?? null;
+      } else {
+        return json(409, { ok: false, error: `Target CPA not applicable: campaign bidding strategy is ${c.biddingStrategyType}. Supported: MAXIMIZE_CONVERSIONS, TARGET_CPA.` });
+      }
+
+      resource = "campaigns";
+      operation = { updateMask: maskPath, update: updateBody };
+      preview = { target: `campaign ${campaignId} (${c.name})`, field: "target CPA", old: oldMicros != null ? Number(oldMicros) / 1e6 : null, new: amount };
+
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
     }

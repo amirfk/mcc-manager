@@ -71,10 +71,16 @@ POST /.netlify/functions/manage
 { "action": "set_asset_group_status", "customerId": "9427798225",
   "assetGroupId": "1234567890", "status": "PAUSED" }
 
+// Set the (optional) target CPA on a Maximize-Conversions or Target-CPA
+// campaign (amount in DOLLARS). Refuses portfolio/other strategies.
+POST /.netlify/functions/manage
+{ "action": "set_target_cpa", "customerId": "9427798225",
+  "campaignId": "1234567890", "amount": 40.00 }
+
 // Add "confirm": true to any of the above to actually apply it.
 ```
 
-Planned next actions (same harness): bid / target-CPA-ROAS adjustments,
+Planned next actions (same harness): target ROAS (when a campaign uses it),
 campaign/ad creation.
 
 Both return `{ ok: true, ... }` on success, or `{ ok: false, step, status, detail, debug }`
