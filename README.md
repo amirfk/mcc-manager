@@ -102,11 +102,20 @@ POST /.netlify/functions/manage
 { "action": "add_negative_keyword", "customerId": "9427798225",
   "campaignId": "1234567890", "text": "nhs", "matchType": "BROAD" }
 
+// Create a PAUSED Search campaign + its budget (atomic). Spends NOTHING until
+// enabled via set_campaign_status. Uses Maximize Conversions.
+POST /.netlify/functions/manage
+{ "action": "create_campaign", "customerId": "9427798225",
+  "name": "Implants - Kingston 2026", "dailyBudget": 20.00 }
+
 // Add "confirm": true to any of the above to actually apply it.
 ```
 
-Planned next actions (same harness): target ROAS (when a campaign uses it),
-campaign/ad creation.
+New campaigns are always created **PAUSED** — a created campaign cannot spend
+until you explicitly enable it with `set_campaign_status`.
+
+Planned next actions (same harness): create ad group, create responsive search
+ad, then keywords via `add_keyword`.
 
 Both return `{ ok: true, ... }` on success, or `{ ok: false, step, status, detail, debug }`
 on failure. `debug` includes **masked** (never full) fingerprints of the developer
