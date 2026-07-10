@@ -13,6 +13,7 @@ budgets/bids, or create/pause campaigns.
 |----------|--------|--------------|
 | `/.netlify/functions/list-accounts` | GET | Health check. Refreshes the OAuth token and calls `customers:listAccessibleCustomers`. Proves the OAuth + developer-token + clean-IP path works. Returns bare customer IDs only. |
 | `/.netlify/functions/list-clients` | GET | Enumerates the child accounts under the MCC via a `customer_client` GAQL query (`googleAds:searchStream`). Returns id, name, currency, timezone, manager flag, level, and status. |
+| `/.netlify/functions/list-campaigns` | GET | Lists every campaign in an account (`?customerId=`) with status, budget id, and daily budget. Source of ids for `manage`. |
 | `/.netlify/functions/manage` | POST | **Write.** The check-then-do management loop. Defaults to a dry run; only mutates when `confirm:true`. Logs every applied change to Supabase. See below. |
 | `/.netlify/functions/get-audit` | GET | Read the audit history of applied changes (`?limit=`, `?customerId=`). |
 
