@@ -118,6 +118,12 @@ POST /.netlify/functions/manage
 { "action": "remove_location", "customerId": "9427798225",
   "campaignId": "1234567890", "criterionId": "1234567890" }
 
+// Set the default (monetary) value of a conversion action — e.g. value a
+// booking at your average case value so bidding can chase revenue, not taps.
+POST /.netlify/functions/manage
+{ "action": "set_conversion_value", "customerId": "9427798225",
+  "conversionActionId": "7034758458", "value": 200 }
+
 // Create a PAUSED Search campaign + its budget (atomic). Spends NOTHING until
 // enabled via set_campaign_status. Uses Maximize Conversions.
 POST /.netlify/functions/manage

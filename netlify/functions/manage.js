@@ -488,6 +488,24 @@ exports.handler = async (event) => {
       operation = { remove: `customers/${customerId}/campaignCriteria/${campaignId}~${criterionId}` };
       preview = { target: `campaign ${campaignId}`, field: "remove location criterion", old: criterionId, new: "REMOVED" };
 
+    } else if (action === "set_conversion_value") {
+      const conversionActionId = digits(req.conversionActionId);
+      const value = Number(req.value);
+      if (!conversionActionId) return json(400, { ok: false, error: "Missing 'conversionActionId'" });
+      if (!(value >= 0)) return json(400, { ok: false, error: "'value' must be a non-negative number" });
+
+      const rows = await search(env, access, customerId,
+        `SELECT conversion_action.id, conversion_action.name, conversion_action.type, conversion_action.value_settings.default_value FROM conversion_action WHERE conversion_action.id = ${conversionActionId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Conversion action ${conversionActionId} not found in ${customerId}` });
+      const ca = rows[0].conversionAction;
+      const oldVal = ca.valueSettings?.defaultValue != null ? Number(ca.valueSettings.defaultValue) : null;
+      // Call-type actions require always_use_default_value = true.
+      const alwaysUse = req.alwaysUseDefaultValue === true || ca.type === "AD_CALL" || ca.type === "WEBSITE_CALL";
+
+      resource = "conversionActions";
+      operation = { updateMask: "value_settings.default_value,value_settings.always_use_default_value", update: { resourceName: `customers/${customerId}/conversionActions/${conversionActionId}`, valueSettings: { defaultValue: value, alwaysUseDefaultValue: alwaysUse } } };
+      preview = { target: `conversion action ${conversionActionId} (${ca.name})`, field: "default value", old: oldVal, new: value };
+
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
     }
