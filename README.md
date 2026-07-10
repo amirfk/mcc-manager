@@ -25,6 +25,7 @@ tested from a browser address bar — use a client that sends the header.
 | `/.netlify/functions/list-negatives` | GET | Existing campaign-level negative keywords (`?customerId=`, optional `&campaignId=`). |
 | `/.netlify/functions/report` | GET | Performance metrics + derived CPA/ROAS at `?level=campaign\|ad_group\|keyword\|ad` (`&days=7\|14\|30`, optional `&campaignId=`). The core optimization input. |
 | `/.netlify/functions/list-conversion-actions` | GET | Conversion actions and their value settings (`?customerId=`). Explains near-zero conversion value / ROAS. |
+| `/.netlify/functions/list-campaign-goals` | GET | Which conversion-goal categories each campaign bids toward (`?customerId=`), plus account defaults. Cross-reference with conversion actions to see the event behind each campaign. |
 | `/.netlify/functions/list-locations` | GET | Location targets/exclusions per campaign with readable names (`?customerId=`, optional `&campaignId=`). |
 | `/.netlify/functions/search-geo` | GET | Resolve a place name to geoTargetConstant id(s) (`?q=`, `&country=`, `&locale=`) for `add_location`. |
 | `/.netlify/functions/manage` | POST | **Write.** The check-then-do management loop. Defaults to a dry run; only mutates when `confirm:true`. Logs every applied change to Supabase. See below. |
