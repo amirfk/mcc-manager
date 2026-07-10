@@ -79,6 +79,26 @@ POST /.netlify/functions/manage
 { "action": "set_target_cpa", "customerId": "9427798225",
   "campaignId": "1234567890", "amount": 40.00 }
 
+// Add a keyword to an ad group (matchType: EXACT | PHRASE | BROAD, default BROAD)
+POST /.netlify/functions/manage
+{ "action": "add_keyword", "customerId": "9427798225",
+  "adGroupId": "1234567890", "text": "dental implants kingston", "matchType": "PHRASE" }
+
+// Pause / enable / remove a keyword (by criterion id from list-keywords)
+POST /.netlify/functions/manage
+{ "action": "set_keyword_status", "customerId": "9427798225",
+  "adGroupId": "1234567890", "criterionId": "1234567890", "status": "PAUSED" }
+
+// Remove a keyword
+POST /.netlify/functions/manage
+{ "action": "remove_keyword", "customerId": "9427798225",
+  "adGroupId": "1234567890", "criterionId": "1234567890" }
+
+// Add a campaign-level negative keyword (block a term across the campaign)
+POST /.netlify/functions/manage
+{ "action": "add_negative_keyword", "customerId": "9427798225",
+  "campaignId": "1234567890", "text": "nhs", "matchType": "BROAD" }
+
 // Add "confirm": true to any of the above to actually apply it.
 ```
 

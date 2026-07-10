@@ -18,6 +18,7 @@
 // Returns (applied):  { ok:true, dry_run:false, applied:true, audit:{...}, result }
 
 const ALLOWED_STATUS = new Set(["PAUSED", "ENABLED", "REMOVED"]);
+const MATCH_TYPES = new Set(["EXACT", "PHRASE", "BROAD"]);
 
 const mask = (v) => {
   if (!v) return { present: false };
@@ -241,6 +242,68 @@ exports.handler = async (event) => {
       resource = "campaigns";
       operation = { updateMask: maskPath, update: updateBody };
       preview = { target: `campaign ${campaignId} (${c.name})`, field: "target CPA", old: oldMicros != null ? Number(oldMicros) / 1e6 : null, new: amount };
+
+    } else if (action === "add_keyword") {
+      const adGroupId = digits(req.adGroupId);
+      const text = String(req.text || "").trim();
+      const matchType = String(req.matchType || "BROAD").toUpperCase();
+      if (!adGroupId) return json(400, { ok: false, error: "Missing 'adGroupId'" });
+      if (!text) return json(400, { ok: false, error: "Missing 'text' (keyword)" });
+      if (!MATCH_TYPES.has(matchType)) return json(400, { ok: false, error: `matchType must be one of ${[...MATCH_TYPES].join(", ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT ad_group.id, ad_group.name FROM ad_group WHERE ad_group.id = ${adGroupId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Ad group ${adGroupId} not found in ${customerId}` });
+
+      resource = "adGroupCriteria";
+      operation = { create: { adGroup: `customers/${customerId}/adGroups/${adGroupId}`, status: "ENABLED", keyword: { text, matchType } } };
+      preview = { target: `ad group ${adGroupId} (${rows[0].adGroup?.name})`, field: `add ${matchType} keyword`, old: null, new: text };
+
+    } else if (action === "set_keyword_status") {
+      const adGroupId = digits(req.adGroupId);
+      const criterionId = digits(req.criterionId);
+      const status = String(req.status || "").toUpperCase();
+      if (!adGroupId || !criterionId) return json(400, { ok: false, error: "Missing 'adGroupId' and/or 'criterionId'" });
+      if (!ALLOWED_STATUS.has(status)) return json(400, { ok: false, error: `status must be one of ${[...ALLOWED_STATUS].join(", ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.status FROM ad_group_criterion WHERE ad_group_criterion.criterion_id = ${criterionId} AND ad_group.id = ${adGroupId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Keyword ${criterionId} not found in ad group ${adGroupId}` });
+      const cur = rows[0].adGroupCriterion;
+
+      resource = "adGroupCriteria";
+      operation = { updateMask: "status", update: { resourceName: `customers/${customerId}/adGroupCriteria/${adGroupId}~${criterionId}`, status } };
+      preview = { target: `keyword "${cur.keyword?.text}" (${criterionId})`, field: "status", old: cur.status, new: status };
+
+    } else if (action === "remove_keyword") {
+      const adGroupId = digits(req.adGroupId);
+      const criterionId = digits(req.criterionId);
+      if (!adGroupId || !criterionId) return json(400, { ok: false, error: "Missing 'adGroupId' and/or 'criterionId'" });
+
+      const rows = await search(env, access, customerId,
+        `SELECT ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.status FROM ad_group_criterion WHERE ad_group_criterion.criterion_id = ${criterionId} AND ad_group.id = ${adGroupId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Keyword ${criterionId} not found in ad group ${adGroupId}` });
+      const cur = rows[0].adGroupCriterion;
+
+      resource = "adGroupCriteria";
+      operation = { remove: `customers/${customerId}/adGroupCriteria/${adGroupId}~${criterionId}` };
+      preview = { target: `keyword "${cur.keyword?.text}" (${criterionId})`, field: "remove keyword", old: cur.status, new: "REMOVED" };
+
+    } else if (action === "add_negative_keyword") {
+      const campaignId = digits(req.campaignId);
+      const text = String(req.text || "").trim();
+      const matchType = String(req.matchType || "BROAD").toUpperCase();
+      if (!campaignId) return json(400, { ok: false, error: "Missing 'campaignId'" });
+      if (!text) return json(400, { ok: false, error: "Missing 'text' (negative keyword)" });
+      if (!MATCH_TYPES.has(matchType)) return json(400, { ok: false, error: `matchType must be one of ${[...MATCH_TYPES].join(", ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.id = ${campaignId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Campaign ${campaignId} not found in ${customerId}` });
+
+      resource = "campaignCriteria";
+      operation = { create: { campaign: `customers/${customerId}/campaigns/${campaignId}`, negative: true, keyword: { text, matchType } } };
+      preview = { target: `campaign ${campaignId} (${rows[0].campaign?.name})`, field: `add ${matchType} NEGATIVE keyword`, old: null, new: text };
 
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
