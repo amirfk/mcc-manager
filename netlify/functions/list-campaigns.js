@@ -13,6 +13,12 @@ const GAQL = `
     campaign.name,
     campaign.status,
     campaign.advertising_channel_type,
+    campaign.bidding_strategy_type,
+    campaign.bidding_strategy,
+    campaign.target_cpa.target_cpa_micros,
+    campaign.target_roas.target_roas,
+    campaign.maximize_conversions.target_cpa_micros,
+    campaign.maximize_conversion_value.target_roas,
     campaign_budget.id,
     campaign_budget.amount_micros
   FROM campaign
@@ -71,11 +77,17 @@ exports.handler = async (event) => {
     const campaigns = batches.flatMap((b) => b.results || []).map((r) => {
       const c = r.campaign || {};
       const b = r.campaignBudget || {};
+      const tcpaMicros = c.targetCpa?.targetCpaMicros ?? c.maximizeConversions?.targetCpaMicros ?? null;
+      const troas = c.targetRoas?.targetRoas ?? c.maximizeConversionValue?.targetRoas ?? null;
       return {
         campaign_id: c.id,
         name: c.name || null,
         status: c.status,
         channel: c.advertisingChannelType || null,
+        bidding_strategy_type: c.biddingStrategyType || null,
+        portfolio_strategy: c.biddingStrategy || null, // set = shared/portfolio strategy (edit on the strategy, not the campaign)
+        target_cpa: tcpaMicros != null ? Number(tcpaMicros) / 1e6 : null,
+        target_roas: troas != null ? Number(troas) : null,
         budget_id: b.id || null,
         daily_budget: b.amountMicros ? Number(b.amountMicros) / 1e6 : null,
       };
