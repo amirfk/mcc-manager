@@ -125,6 +125,15 @@ exports.handler = async (event) => {
     const debug = { version: env.version, developer_token: mask(process.env.GOOGLE_ADS_DEVELOPER_TOKEN), login_customer_id: mask(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID) };
 
     if (event.httpMethod !== "POST") return json(405, { ok: false, error: "Use POST" });
+
+    // Auth gate: only callers presenting the shared secret may mutate anything.
+    const secret = (process.env.MCC_API_SECRET || "").trim();
+    if (!secret) return json(500, { ok: false, error: "Server not configured: MCC_API_SECRET is not set" });
+    const provided = ((event.headers && (event.headers["x-mcc-token"] || event.headers["X-Mcc-Token"])) || "").trim();
+    if (provided.length !== secret.length || provided !== secret) {
+      return json(401, { ok: false, error: "Unauthorized: missing or invalid x-mcc-token header" });
+    }
+
     let req; try { req = JSON.parse(event.body || "{}"); } catch { return json(400, { ok: false, error: "Body must be JSON" }); }
 
     const action = req.action;

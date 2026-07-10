@@ -19,8 +19,9 @@ budgets/bids, or create/pause campaigns.
 
 ## Management engine (`manage`) — the check-then-do loop
 
-`manage` is the one endpoint that changes things. It is built so a change is
-never silent:
+`manage` is the one endpoint that changes things. It is **locked**: every call
+must include an `x-mcc-token` header matching `MCC_API_SECRET`, or it returns
+401 before doing anything. It is also built so a change is never silent:
 
 1. **Dry run by default.** Without `confirm:true`, every call runs with the
    Google Ads `validateOnly:true` flag — the API validates the change and
@@ -77,6 +78,7 @@ token and login customer id to diagnose auth issues without exposing secrets.
 | `GOOGLE_ADS_API_VERSION` | Optional. Defaults to `v22`. |
 | `SUPABASE_URL` | Supabase project URL, for the audit log. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key. **Server-side only** — bypasses row security; never expose to a browser. |
+| `MCC_API_SECRET` | Shared secret required to call `manage`. Sent by the caller as an `x-mcc-token` header. Without a match, `manage` returns 401. |
 
 > The `adwords` OAuth scope already covers write access — no new scope is needed
 > when management endpoints are added later. Any write tooling must be gated
