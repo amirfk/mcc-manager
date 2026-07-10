@@ -27,6 +27,8 @@ $reads = @(
   @{ name = "search-terms"; url = "$Base/list-search-terms?customerId=$CustomerId&limit=500" },
   @{ name = "ads";             url = "$Base/list-ads?customerId=$CustomerId" },
   @{ name = "negatives";       url = "$Base/list-negatives?customerId=$CustomerId" },
+  @{ name = "locations";       url = "$Base/list-locations?customerId=$CustomerId" },
+  @{ name = "conversion-actions"; url = "$Base/list-conversion-actions?customerId=$CustomerId" },
   @{ name = "report-campaign"; url = "$Base/report?customerId=$CustomerId&level=campaign&days=30" },
   @{ name = "report-keyword";  url = "$Base/report?customerId=$CustomerId&level=keyword&days=30" },
   @{ name = "report-ad";       url = "$Base/report?customerId=$CustomerId&level=ad&days=30" },

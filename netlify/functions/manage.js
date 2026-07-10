@@ -464,6 +464,30 @@ exports.handler = async (event) => {
         }
       }
 
+    } else if (action === "add_location") {
+      const campaignId = digits(req.campaignId);
+      const geoId = digits(req.geoTargetConstantId);
+      const negative = req.negative === true;
+      if (!campaignId) return json(400, { ok: false, error: "Missing 'campaignId'" });
+      if (!geoId) return json(400, { ok: false, error: "Missing 'geoTargetConstantId' (use search-geo to find it)" });
+
+      const rows = await search(env, access, customerId,
+        `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.id = ${campaignId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Campaign ${campaignId} not found in ${customerId}` });
+
+      resource = "campaignCriteria";
+      operation = { create: { campaign: `customers/${customerId}/campaigns/${campaignId}`, negative, location: { geoTargetConstant: `geoTargetConstants/${geoId}` } } };
+      preview = { target: `campaign ${campaignId} (${rows[0].campaign?.name})`, field: negative ? "exclude location" : "add location target", old: null, new: `geoTargetConstants/${geoId}` };
+
+    } else if (action === "remove_location") {
+      const campaignId = digits(req.campaignId);
+      const criterionId = digits(req.criterionId);
+      if (!campaignId || !criterionId) return json(400, { ok: false, error: "Missing 'campaignId' and/or 'criterionId'" });
+
+      resource = "campaignCriteria";
+      operation = { remove: `customers/${customerId}/campaignCriteria/${campaignId}~${criterionId}` };
+      preview = { target: `campaign ${campaignId}`, field: "remove location criterion", old: criterionId, new: "REMOVED" };
+
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
     }
