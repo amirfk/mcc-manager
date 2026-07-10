@@ -108,6 +108,12 @@ POST /.netlify/functions/manage
 { "action": "create_campaign", "customerId": "9427798225",
   "name": "Implants - Kingston 2026", "dailyBudget": 20.00 }
 
+// Create an ad group inside a campaign (status default ENABLED; it won't serve
+// while the campaign is paused)
+POST /.netlify/functions/manage
+{ "action": "create_ad_group", "customerId": "9427798225",
+  "campaignId": "1234567890", "name": "Implants" }
+
 // Add "confirm": true to any of the above to actually apply it.
 ```
 

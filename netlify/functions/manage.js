@@ -378,7 +378,7 @@ exports.handler = async (event) => {
 
       // Atomic: budget (temp id -1) + PAUSED campaign referencing it.
       mutateOperations = [
-        { campaignBudgetOperation: { create: { resourceName: budgetRes, name: `${name} — budget`, amountMicros, deliveryMethod: "STANDARD", explicitlyShared: false } } },
+        { campaignBudgetOperation: { create: { resourceName: budgetRes, name: `${name} - budget`, amountMicros, deliveryMethod: "STANDARD", explicitlyShared: false } } },
         { campaignOperation: { create: {
           name, status: "PAUSED", advertisingChannelType: "SEARCH",
           campaignBudget: budgetRes,
@@ -389,6 +389,22 @@ exports.handler = async (event) => {
       ];
       resource = "campaigns";
       preview = { target: `NEW campaign "${name}"`, field: "create PAUSED Search campaign", old: null, new: `${name} @ ${amount}/day, Maximize Conversions, PAUSED (spends nothing until enabled)` };
+
+    } else if (action === "create_ad_group") {
+      const campaignId = digits(req.campaignId);
+      const name = String(req.name || "").trim();
+      const status = String(req.status || "ENABLED").toUpperCase();
+      if (!campaignId) return json(400, { ok: false, error: "Missing 'campaignId'" });
+      if (!name) return json(400, { ok: false, error: "Missing 'name'" });
+      if (!ALLOWED_STATUS.has(status)) return json(400, { ok: false, error: `status must be one of ${[...ALLOWED_STATUS].join(", ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.id = ${campaignId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Campaign ${campaignId} not found in ${customerId}` });
+
+      resource = "adGroups";
+      operation = { create: { name, campaign: `customers/${customerId}/campaigns/${campaignId}`, status, type: "SEARCH_STANDARD" } };
+      preview = { target: `campaign ${campaignId} (${rows[0].campaign?.name})`, field: "create ad group", old: null, new: name };
 
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
