@@ -22,6 +22,8 @@ tested from a browser address bar — use a client that sends the header.
 | `/.netlify/functions/list-keywords` | GET | Lists all keywords in an account (`?customerId=`, optional `&campaignId=`) with match type, status, and criterion id. Source of ids for keyword mutations. |
 | `/.netlify/functions/list-search-terms` | GET | The actual search queries that triggered ads (`?customerId=`, optional `&campaignId=`, `&days=7\|14\|30`, `&limit=`) with clicks, cost, conversions. Discovery view for optimization. |
 | `/.netlify/functions/list-ads` | GET | The ad creatives in an account (`?customerId=`, optional `&campaignId=`) — for responsive search ads, their headlines, descriptions, final URLs, status, and type. |
+| `/.netlify/functions/list-negatives` | GET | Existing campaign-level negative keywords (`?customerId=`, optional `&campaignId=`). |
+| `/.netlify/functions/report` | GET | Performance metrics + derived CPA/ROAS at `?level=campaign\|ad_group\|keyword\|ad` (`&days=7\|14\|30`, optional `&campaignId=`). The core optimization input. |
 | `/.netlify/functions/manage` | POST | **Write.** The check-then-do management loop. Defaults to a dry run; only mutates when `confirm:true`. Logs every applied change to Supabase. See below. |
 | `/.netlify/functions/get-audit` | GET | Read the audit history of applied changes (`?limit=`, `?customerId=`). |
 
@@ -114,6 +116,20 @@ POST /.netlify/functions/manage
 POST /.netlify/functions/manage
 { "action": "create_ad_group", "customerId": "9427798225",
   "campaignId": "1234567890", "name": "Implants" }
+
+// Pause / enable / remove an ad (adId from list-ads). Use to de-duplicate ads.
+POST /.netlify/functions/manage
+{ "action": "set_ad_status", "customerId": "9427798225",
+  "adGroupId": "1234567890", "adId": "1234567890", "status": "PAUSED" }
+
+// Create a responsive search ad (created PAUSED). 3-15 headlines (<=30 chars),
+// 2-4 descriptions (<=90 chars), one finalUrl. Add exemptPolicyViolations for
+// health terms.
+POST /.netlify/functions/manage
+{ "action": "create_ad", "customerId": "9427798225", "adGroupId": "1234567890",
+  "headlines": ["Dental Implants Kingston","Specialist Implant Clinic","Book a Consultation"],
+  "descriptions": ["Permanent implants by specialists.","Finance available. Book today."],
+  "finalUrl": "https://example.com/implants", "exemptPolicyViolations": true }
 
 // Add "confirm": true to any of the above to actually apply it.
 ```

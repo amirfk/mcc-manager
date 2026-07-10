@@ -406,6 +406,64 @@ exports.handler = async (event) => {
       operation = { create: { name, campaign: `customers/${customerId}/campaigns/${campaignId}`, status, type: "SEARCH_STANDARD" } };
       preview = { target: `campaign ${campaignId} (${rows[0].campaign?.name})`, field: "create ad group", old: null, new: name };
 
+    } else if (action === "set_ad_status") {
+      const adGroupId = digits(req.adGroupId);
+      const adId = digits(req.adId);
+      const status = String(req.status || "").toUpperCase();
+      if (!adGroupId || !adId) return json(400, { ok: false, error: "Missing 'adGroupId' and/or 'adId'" });
+      if (!ALLOWED_STATUS.has(status)) return json(400, { ok: false, error: `status must be one of ${[...ALLOWED_STATUS].join(", ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT ad_group_ad.ad.id, ad_group_ad.status FROM ad_group_ad WHERE ad_group_ad.ad.id = ${adId} AND ad_group.id = ${adGroupId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Ad ${adId} not found in ad group ${adGroupId}` });
+      const cur = rows[0].adGroupAd;
+
+      resource = "adGroupAds";
+      if (status === "REMOVED") {
+        operation = { remove: `customers/${customerId}/adGroupAds/${adGroupId}~${adId}` };
+        preview = { target: `ad ${adId} (ad group ${adGroupId})`, field: "remove ad", old: cur.status, new: "REMOVED" };
+      } else {
+        operation = { updateMask: "status", update: { resourceName: `customers/${customerId}/adGroupAds/${adGroupId}~${adId}`, status } };
+        preview = { target: `ad ${adId} (ad group ${adGroupId})`, field: "status", old: cur.status, new: status };
+      }
+
+    } else if (action === "create_ad") {
+      const adGroupId = digits(req.adGroupId);
+      const headlines = Array.isArray(req.headlines) ? req.headlines.map((s) => String(s).trim()).filter(Boolean) : [];
+      const descriptions = Array.isArray(req.descriptions) ? req.descriptions.map((s) => String(s).trim()).filter(Boolean) : [];
+      const finalUrl = String(req.finalUrl || "").trim();
+      if (!adGroupId) return json(400, { ok: false, error: "Missing 'adGroupId'" });
+      if (headlines.length < 3 || headlines.length > 15) return json(400, { ok: false, error: "Need 3–15 headlines" });
+      if (descriptions.length < 2 || descriptions.length > 4) return json(400, { ok: false, error: "Need 2–4 descriptions" });
+      if (!finalUrl) return json(400, { ok: false, error: "Missing 'finalUrl'" });
+      const badH = headlines.filter((h) => h.length > 30);
+      if (badH.length) return json(400, { ok: false, error: `Headline(s) over 30 chars: ${badH.join(" | ")}` });
+      const badD = descriptions.filter((d) => d.length > 90);
+      if (badD.length) return json(400, { ok: false, error: `Description(s) over 90 chars: ${badD.join(" | ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT ad_group.id, ad_group.name FROM ad_group WHERE ad_group.id = ${adGroupId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Ad group ${adGroupId} not found in ${customerId}` });
+
+      resource = "adGroupAds";
+      operation = { create: {
+        adGroup: `customers/${customerId}/adGroups/${adGroupId}`,
+        status: "PAUSED",
+        ad: { finalUrls: [finalUrl], responsiveSearchAd: { headlines: headlines.map((t) => ({ text: t })), descriptions: descriptions.map((t) => ({ text: t })) } },
+      } };
+      preview = { target: `ad group ${adGroupId} (${rows[0].adGroup?.name})`, field: "create responsive search ad (PAUSED)", old: null, new: `${headlines.length} headlines, ${descriptions.length} descriptions -> ${finalUrl}` };
+
+      if (req.exemptPolicyViolations === true) {
+        const probe = await policyExemptKeys(env, access, customerId, resource, operation);
+        if (!probe.ok && probe.nonExemptible.length) {
+          return json(409, { ok: false, error: `Non-exemptible policy violation(s): ${probe.nonExemptible.join("; ")}`, detail: probe.raw });
+        }
+        if (probe.keys.length) {
+          operation.exemptPolicyViolationKeys = probe.keys;
+          preview.policy_exemption = probe.keys.map((k) => k.policyName);
+        }
+      }
+
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
     }
