@@ -21,6 +21,7 @@ tested from a browser address bar — use a client that sends the header.
 | `/.netlify/functions/list-adgroups` | GET | Lists ad groups and asset groups in an account (`?customerId=`) with status and parent campaign. Source of ad/asset group ids for `manage`. |
 | `/.netlify/functions/list-keywords` | GET | Lists all keywords in an account (`?customerId=`, optional `&campaignId=`) with match type, status, and criterion id. Source of ids for keyword mutations. |
 | `/.netlify/functions/list-search-terms` | GET | The actual search queries that triggered ads (`?customerId=`, optional `&campaignId=`, `&days=7\|14\|30`, `&limit=`) with clicks, cost, conversions. Discovery view for optimization. |
+| `/.netlify/functions/list-ads` | GET | The ad creatives in an account (`?customerId=`, optional `&campaignId=`) — for responsive search ads, their headlines, descriptions, final URLs, status, and type. |
 | `/.netlify/functions/manage` | POST | **Write.** The check-then-do management loop. Defaults to a dry run; only mutates when `confirm:true`. Logs every applied change to Supabase. See below. |
 | `/.netlify/functions/get-audit` | GET | Read the audit history of applied changes (`?limit=`, `?customerId=`). |
 
