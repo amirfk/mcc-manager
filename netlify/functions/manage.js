@@ -384,6 +384,7 @@ exports.handler = async (event) => {
           campaignBudget: budgetRes,
           maximizeConversions: {},
           networkSettings: { targetGoogleSearch: true, targetSearchNetwork: true, targetContentNetwork: false, targetPartnerSearchNetwork: false },
+          containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
         } } },
       ];
       resource = "campaigns";
