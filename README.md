@@ -79,10 +79,13 @@ POST /.netlify/functions/manage
 { "action": "set_target_cpa", "customerId": "9427798225",
   "campaignId": "1234567890", "amount": 40.00 }
 
-// Add a keyword to an ad group (matchType: EXACT | PHRASE | BROAD, default BROAD)
+// Add a keyword to an ad group (matchType: EXACT | PHRASE | BROAD, default BROAD).
+// Health/sensitive terms trip Google policy; add "exemptPolicyViolations": true
+// to acknowledge and override EXEMPTIBLE violations (common for medical/dental).
 POST /.netlify/functions/manage
 { "action": "add_keyword", "customerId": "9427798225",
-  "adGroupId": "1234567890", "text": "dental implants kingston", "matchType": "PHRASE" }
+  "adGroupId": "1234567890", "text": "dental implants kingston",
+  "matchType": "PHRASE", "exemptPolicyViolations": true }
 
 // Pause / enable / remove a keyword (by criterion id from list-keywords)
 POST /.netlify/functions/manage

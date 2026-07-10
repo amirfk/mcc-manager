@@ -111,6 +111,36 @@ async function mutate(env, access, customerId, resource, operation, validateOnly
   return body;
 }
 
+// Probe an operation with validateOnly to discover policy violations.
+// Returns { ok:true } if clean, otherwise the exemptible policy keys (to attach
+// as exemptPolicyViolationKeys) and any non-exemptible policy names.
+async function policyExemptKeys(env, access, customerId, resource, operation) {
+  const url = `https://googleads.googleapis.com/${env.version}/customers/${customerId}/${resource}:mutate`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${access}`, "developer-token": env.devToken,
+      "login-customer-id": env.loginCid, "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ operations: [operation], validateOnly: true }),
+  });
+  const text = await res.text();
+  let body; try { body = JSON.parse(text); } catch { body = text; }
+  if (res.ok) return { ok: true, keys: [], nonExemptible: [] };
+
+  const keys = [], nonExemptible = [];
+  for (const d of (body?.error?.details || [])) {
+    for (const e of (d.errors || [])) {
+      const pv = e.details?.policyViolationDetails;
+      if (pv?.key) {
+        if (pv.isExemptible) keys.push(pv.key);
+        else nonExemptible.push(pv.externalPolicyName || pv.key.policyName);
+      }
+    }
+  }
+  return { ok: false, keys, nonExemptible, raw: body };
+}
+
 exports.handler = async (event) => {
   try {
     const env = {
@@ -258,6 +288,19 @@ exports.handler = async (event) => {
       resource = "adGroupCriteria";
       operation = { create: { adGroup: `customers/${customerId}/adGroups/${adGroupId}`, status: "ENABLED", keyword: { text, matchType } } };
       preview = { target: `ad group ${adGroupId} (${rows[0].adGroup?.name})`, field: `add ${matchType} keyword`, old: null, new: text };
+
+      // Health/sensitive keywords trip Google policy. If the caller opted in,
+      // attach exemptions for EXEMPTIBLE violations; refuse non-exemptible ones.
+      if (req.exemptPolicyViolations === true) {
+        const probe = await policyExemptKeys(env, access, customerId, resource, operation);
+        if (!probe.ok && probe.nonExemptible.length) {
+          return json(409, { ok: false, error: `Non-exemptible policy violation(s): ${probe.nonExemptible.join("; ")}`, detail: probe.raw });
+        }
+        if (probe.keys.length) {
+          operation.exemptPolicyViolationKeys = probe.keys;
+          preview.policy_exemption = probe.keys.map((k) => k.policyName);
+        }
+      }
 
     } else if (action === "set_keyword_status") {
       const adGroupId = digits(req.adGroupId);
