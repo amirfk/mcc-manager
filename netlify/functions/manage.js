@@ -180,6 +180,36 @@ exports.handler = async (event) => {
       operation = { updateMask: "amount_micros", update: { resourceName: `customers/${customerId}/campaignBudgets/${budgetId}`, amountMicros } };
       preview = { target: `budget ${budgetId} (${current.name})`, field: "daily budget", old: oldDollars, new: amount };
 
+    } else if (action === "set_ad_group_status") {
+      const adGroupId = digits(req.adGroupId);
+      const status = String(req.status || "").toUpperCase();
+      if (!adGroupId) return json(400, { ok: false, error: "Missing 'adGroupId'" });
+      if (!ALLOWED_STATUS.has(status)) return json(400, { ok: false, error: `status must be one of ${[...ALLOWED_STATUS].join(", ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT ad_group.id, ad_group.name, ad_group.status FROM ad_group WHERE ad_group.id = ${adGroupId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Ad group ${adGroupId} not found in ${customerId}` });
+      const current = rows[0].adGroup;
+
+      resource = "adGroups";
+      operation = { updateMask: "status", update: { resourceName: `customers/${customerId}/adGroups/${adGroupId}`, status } };
+      preview = { target: `ad group ${adGroupId} (${current.name})`, field: "status", old: current.status, new: status };
+
+    } else if (action === "set_asset_group_status") {
+      const assetGroupId = digits(req.assetGroupId);
+      const status = String(req.status || "").toUpperCase();
+      if (!assetGroupId) return json(400, { ok: false, error: "Missing 'assetGroupId'" });
+      if (!ALLOWED_STATUS.has(status)) return json(400, { ok: false, error: `status must be one of ${[...ALLOWED_STATUS].join(", ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT asset_group.id, asset_group.name, asset_group.status FROM asset_group WHERE asset_group.id = ${assetGroupId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Asset group ${assetGroupId} not found in ${customerId}` });
+      const current = rows[0].assetGroup;
+
+      resource = "assetGroups";
+      operation = { updateMask: "status", update: { resourceName: `customers/${customerId}/assetGroups/${assetGroupId}`, status } };
+      preview = { target: `asset group ${assetGroupId} (${current.name})`, field: "status", old: current.status, new: status };
+
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
     }

@@ -18,6 +18,7 @@ tested from a browser address bar — use a client that sends the header.
 | `/.netlify/functions/list-accounts` | GET | Health check. Refreshes the OAuth token and calls `customers:listAccessibleCustomers`. Proves the OAuth + developer-token + clean-IP path works. Returns bare customer IDs only. |
 | `/.netlify/functions/list-clients` | GET | Enumerates the child accounts under the MCC via a `customer_client` GAQL query (`googleAds:searchStream`). Returns id, name, currency, timezone, manager flag, level, and status. |
 | `/.netlify/functions/list-campaigns` | GET | Lists every campaign in an account (`?customerId=`) with status, budget id, and daily budget. Source of ids for `manage`. |
+| `/.netlify/functions/list-adgroups` | GET | Lists ad groups and asset groups in an account (`?customerId=`) with status and parent campaign. Source of ad/asset group ids for `manage`. |
 | `/.netlify/functions/manage` | POST | **Write.** The check-then-do management loop. Defaults to a dry run; only mutates when `confirm:true`. Logs every applied change to Supabase. See below. |
 | `/.netlify/functions/get-audit` | GET | Read the audit history of applied changes (`?limit=`, `?customerId=`). |
 
@@ -60,10 +61,20 @@ POST /.netlify/functions/manage
 { "action": "update_campaign_budget", "customerId": "9427798225",
   "budgetId": "1234567890", "amount": 50.00 }
 
+// Pause / enable an ad group (Search, Display, Demand Gen)
+POST /.netlify/functions/manage
+{ "action": "set_ad_group_status", "customerId": "9427798225",
+  "adGroupId": "1234567890", "status": "PAUSED" }
+
+// Pause / enable an asset group (Performance Max)
+POST /.netlify/functions/manage
+{ "action": "set_asset_group_status", "customerId": "9427798225",
+  "assetGroupId": "1234567890", "status": "PAUSED" }
+
 // Add "confirm": true to any of the above to actually apply it.
 ```
 
-Planned next actions (same harness): bid adjustments, ad group pause/enable,
+Planned next actions (same harness): bid / target-CPA-ROAS adjustments,
 campaign/ad creation.
 
 Both return `{ ok: true, ... }` on success, or `{ ok: false, step, status, detail, debug }`
