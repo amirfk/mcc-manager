@@ -141,6 +141,24 @@ async function policyExemptKeys(env, access, customerId, resource, operation) {
   return { ok: false, keys, nonExemptible, raw: body };
 }
 
+// Multi-operation atomic mutate (googleAds:mutate). Used for create flows that
+// span resources (e.g. budget + campaign) via temporary resource names.
+async function googleAdsMutate(env, access, customerId, mutateOperations, validateOnly) {
+  const url = `https://googleads.googleapis.com/${env.version}/customers/${customerId}/googleAds:mutate`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${access}`, "developer-token": env.devToken,
+      "login-customer-id": env.loginCid, "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ mutateOperations, validateOnly }),
+  });
+  const text = await res.text();
+  let body; try { body = JSON.parse(text); } catch { body = text; }
+  if (!res.ok) throw { step: "googleads_mutate", status: res.status, detail: body };
+  return body;
+}
+
 exports.handler = async (event) => {
   try {
     const env = {
@@ -177,7 +195,7 @@ exports.handler = async (event) => {
     const access = await getAccessToken(env);
     await assertUnderMcc(env, access, customerId); // hard guardrail
 
-    let resource, operation, preview;
+    let resource, operation, preview, mutateOperations = null;
 
     if (action === "set_campaign_status") {
       const campaignId = digits(req.campaignId);
@@ -348,15 +366,41 @@ exports.handler = async (event) => {
       operation = { create: { campaign: `customers/${customerId}/campaigns/${campaignId}`, negative: true, keyword: { text, matchType } } };
       preview = { target: `campaign ${campaignId} (${rows[0].campaign?.name})`, field: `add ${matchType} NEGATIVE keyword`, old: null, new: text };
 
+    } else if (action === "create_campaign") {
+      const name = String(req.name || "").trim();
+      const amount = Number(req.dailyBudget);
+      const channel = String(req.channel || "SEARCH").toUpperCase();
+      if (!name) return json(400, { ok: false, error: "Missing 'name'" });
+      if (!(amount > 0)) return json(400, { ok: false, error: "'dailyBudget' (dollars) must be a positive number" });
+      if (channel !== "SEARCH") return json(400, { ok: false, error: "Only channel 'SEARCH' is supported for creation right now." });
+      const amountMicros = String(Math.round(amount * 1e6));
+      const budgetRes = `customers/${customerId}/campaignBudgets/-1`;
+
+      // Atomic: budget (temp id -1) + PAUSED campaign referencing it.
+      mutateOperations = [
+        { campaignBudgetOperation: { create: { resourceName: budgetRes, name: `${name} — budget`, amountMicros, deliveryMethod: "STANDARD", explicitlyShared: false } } },
+        { campaignOperation: { create: {
+          name, status: "PAUSED", advertisingChannelType: "SEARCH",
+          campaignBudget: budgetRes,
+          maximizeConversions: {},
+          networkSettings: { targetGoogleSearch: true, targetSearchNetwork: true, targetContentNetwork: false, targetPartnerSearchNetwork: false },
+        } } },
+      ];
+      resource = "campaigns";
+      preview = { target: `NEW campaign "${name}"`, field: "create PAUSED Search campaign", old: null, new: `${name} @ ${amount}/day, Maximize Conversions, PAUSED (spends nothing until enabled)` };
+
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
     }
 
-    // Always call the API with validateOnly first-or-only.
-    const result = await mutate(env, access, customerId, resource, operation, validateOnly);
+    // Route through the atomic multi-op mutate for create flows, else the
+    // single-resource mutate. Both honor validateOnly (dry run).
+    const result = mutateOperations
+      ? await googleAdsMutate(env, access, customerId, mutateOperations, validateOnly)
+      : await mutate(env, access, customerId, resource, operation, validateOnly);
 
     if (validateOnly) {
-      return json(200, { ok: true, dry_run: true, action, customerId, preview, request: operation, note: "Nothing changed. Re-send with confirm:true to apply." });
+      return json(200, { ok: true, dry_run: true, action, customerId, preview, request: mutateOperations || operation, note: "Nothing changed. Re-send with confirm:true to apply." });
     }
 
     const record = {
@@ -364,7 +408,7 @@ exports.handler = async (event) => {
       target: preview.target, field: preview.field,
       old_value: preview.old == null ? null : String(preview.old),
       new_value: preview.new == null ? null : String(preview.new),
-      request: operation, result, status: "applied",
+      request: mutateOperations || operation, result, status: "applied",
     };
     const audit = await writeAudit(env, record);
     return json(200, {
