@@ -19,8 +19,18 @@ const GAQL = `
   ORDER BY campaign.name
 `.trim();
 
+const authError = (event) => {
+  const s = (process.env.MCC_API_SECRET || "").trim();
+  if (!s) return json(500, { ok: false, error: "Server not configured: MCC_API_SECRET is not set" });
+  const p = ((event && event.headers && (event.headers["x-mcc-token"] || event.headers["X-Mcc-Token"])) || "").trim();
+  if (p.length !== s.length || p !== s) return json(401, { ok: false, error: "Unauthorized: missing or invalid x-mcc-token header" });
+  return null;
+};
+
 exports.handler = async (event) => {
   const H = { "Content-Type": "application/json" };
+  const denied = authError(event);
+  if (denied) return denied;
   try {
     const clientId     = (process.env.GOOGLE_ADS_CLIENT_ID || "").trim();
     const clientSecret = (process.env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim();

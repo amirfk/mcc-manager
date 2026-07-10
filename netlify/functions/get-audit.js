@@ -8,7 +8,17 @@
 const digits = (v) => String(v || "").replace(/[^0-9]/g, "");
 const json = (statusCode, obj) => ({ statusCode, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) });
 
+const authError = (event) => {
+  const s = (process.env.MCC_API_SECRET || "").trim();
+  if (!s) return json(500, { ok: false, error: "Server not configured: MCC_API_SECRET is not set" });
+  const p = ((event && event.headers && (event.headers["x-mcc-token"] || event.headers["X-Mcc-Token"])) || "").trim();
+  if (p.length !== s.length || p !== s) return json(401, { ok: false, error: "Unauthorized: missing or invalid x-mcc-token header" });
+  return null;
+};
+
 exports.handler = async (event) => {
+  const denied = authError(event);
+  if (denied) return denied;
   const supabaseUrl = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
   const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
   if (!supabaseUrl || !supabaseKey) {

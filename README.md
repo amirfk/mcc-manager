@@ -4,8 +4,12 @@ Server-side tooling to read (and eventually manage) Google Ads accounts under a
 Manager Account (MCC). Runs as **Netlify Functions** so calls originate from a
 clean server IP — the Google Ads API is region-blocked from some local machines.
 
-Everything shipped so far is **read-only**. Nothing here can spend money, change
-budgets/bids, or create/pause campaigns.
+Everything shipped so far is **read-only** except `manage`. Nothing but `manage`
+can spend money, change budgets/bids, or create/pause campaigns.
+
+**All endpoints require auth:** every call must send an `x-mcc-token` header
+matching `MCC_API_SECRET`, or it returns 401. GET endpoints can no longer be
+tested from a browser address bar — use a client that sends the header.
 
 ## Endpoints
 
@@ -78,7 +82,7 @@ token and login customer id to diagnose auth issues without exposing secrets.
 | `GOOGLE_ADS_API_VERSION` | Optional. Defaults to `v22`. |
 | `SUPABASE_URL` | Supabase project URL, for the audit log. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key. **Server-side only** — bypasses row security; never expose to a browser. |
-| `MCC_API_SECRET` | Shared secret required to call `manage`. Sent by the caller as an `x-mcc-token` header. Without a match, `manage` returns 401. |
+| `MCC_API_SECRET` | Shared secret required to call **every** endpoint. Sent by the caller as an `x-mcc-token` header. Without a match, the endpoint returns 401. |
 
 > The `adwords` OAuth scope already covers write access — no new scope is needed
 > when management endpoints are added later. Any write tooling must be gated
