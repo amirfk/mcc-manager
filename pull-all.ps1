@@ -48,4 +48,20 @@ foreach ($r in $reads) {
     Write-Host ("FAIL {0,-13} : {1}" -f $r.name, $_.Exception.Message)
   }
 }
-Write-Host "Done. JSON files are in $out"
+# Optional: also download extra CSVs (e.g. published Google Sheet tabs) listed
+# in data\sheet-sources.txt, one per line as:  name,https://...&output=csv
+# (Use this only for NON-personal tabs, e.g. monthly revenue totals. Keep raw
+#  lead/PII exports as manual CSV drops into data\ — see LEADS-DATA.md.)
+$srcFile = Join-Path $out "sheet-sources.txt"
+if (Test-Path $srcFile) {
+  Get-Content $srcFile | Where-Object { $_ -match "," -and $_ -notmatch "^\s*#" } | ForEach-Object {
+    $parts = $_ -split ",", 2
+    $nm = $parts[0].Trim(); $u = $parts[1].Trim()
+    try {
+      Invoke-WebRequest -Uri $u -OutFile (Join-Path $out ("{0}.csv" -f $nm)) -UseBasicParsing -ErrorAction Stop
+      Write-Host ("OK   sheet {0,-12} -> data\{0}.csv" -f $nm)
+    } catch { Write-Host ("FAIL sheet {0}: {1}" -f $nm, $_.Exception.Message) }
+  }
+}
+
+Write-Host "Done. Files are in $out"

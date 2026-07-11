@@ -532,6 +532,29 @@ exports.handler = async (event) => {
         return json(400, { ok: false, error: "kind must be 'age' or 'gender'" });
       }
 
+    } else if (action === "set_geo_radius") {
+      const campaignId = digits(req.campaignId);
+      const lat = Number(req.lat), lng = Number(req.lng);
+      const radius = Number(req.radius) > 0 ? Number(req.radius) : 10;
+      const radiusUnits = String(req.radiusUnits || "MILES").toUpperCase();
+      const removeIds = Array.isArray(req.removeCriterionIds) ? req.removeCriterionIds.map(digits).filter(Boolean) : [];
+      if (!campaignId) return json(400, { ok: false, error: "Missing 'campaignId'" });
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json(400, { ok: false, error: "Need numeric 'lat' and 'lng'" });
+      if (!["MILES", "KILOMETERS"].includes(radiusUnits)) return json(400, { ok: false, error: "radiusUnits must be MILES or KILOMETERS" });
+
+      const rows = await search(env, access, customerId,
+        `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.id = ${campaignId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Campaign ${campaignId} not found in ${customerId}` });
+
+      // Atomic: remove existing LOCATION criteria (they conflict with proximity),
+      // then add one proximity (radius) target. Validated as a whole by dry run.
+      mutateOperations = [
+        ...removeIds.map((id) => ({ campaignCriterionOperation: { remove: `customers/${customerId}/campaignCriteria/${campaignId}~${id}` } })),
+        { campaignCriterionOperation: { create: { campaign: `customers/${customerId}/campaigns/${campaignId}`, proximity: { radiusUnits, radius, geoPoint: { latitudeInMicroDegrees: Math.round(lat * 1e6), longitudeInMicroDegrees: Math.round(lng * 1e6) } } } } },
+      ];
+      resource = "campaignCriteria";
+      preview = { target: `campaign ${campaignId} (${rows[0].campaign?.name})`, field: "set geo to radius", old: `${removeIds.length} location criteria removed`, new: `${radius} ${radiusUnits} around ${lat}, ${lng}` };
+
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });
     }

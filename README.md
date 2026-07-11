@@ -121,6 +121,14 @@ POST /.netlify/functions/manage
 { "action": "remove_location", "customerId": "9427798225",
   "campaignId": "1234567890", "criterionId": "1234567890" }
 
+// Switch a campaign to RADIUS (proximity) targeting, atomically removing the
+// existing location criteria first (location + proximity can't coexist).
+// removeCriterionIds = the LOCATION criterion ids from list-locations.
+POST /.netlify/functions/manage
+{ "action": "set_geo_radius", "customerId": "9427798225", "campaignId": "1234567890",
+  "lat": 51.4129, "lng": -0.3007, "radius": 10, "radiusUnits": "MILES",
+  "removeCriterionIds": ["1007203","1007246","9215348"] }
+
 // Set the default (monetary) value of a conversion action — e.g. value a
 // booking at your average case value so bidding can chase revenue, not taps.
 POST /.netlify/functions/manage
