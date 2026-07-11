@@ -19,6 +19,8 @@
 
 const ALLOWED_STATUS = new Set(["PAUSED", "ENABLED", "REMOVED"]);
 const MATCH_TYPES = new Set(["EXACT", "PHRASE", "BROAD"]);
+const AGE_RANGES = new Set(["AGE_RANGE_18_24", "AGE_RANGE_25_34", "AGE_RANGE_35_44", "AGE_RANGE_45_54", "AGE_RANGE_55_64", "AGE_RANGE_65_UP", "AGE_RANGE_UNDETERMINED"]);
+const GENDERS = new Set(["MALE", "FEMALE", "UNDETERMINED"]);
 
 const mask = (v) => {
   if (!v) return { present: false };
@@ -505,6 +507,30 @@ exports.handler = async (event) => {
       resource = "conversionActions";
       operation = { updateMask: "value_settings.default_value,value_settings.always_use_default_value", update: { resourceName: `customers/${customerId}/conversionActions/${conversionActionId}`, valueSettings: { defaultValue: value, alwaysUseDefaultValue: alwaysUse } } };
       preview = { target: `conversion action ${conversionActionId} (${ca.name})`, field: "default value", old: oldVal, new: value };
+
+    } else if (action === "exclude_demographic") {
+      const adGroupId = digits(req.adGroupId);
+      const kind = String(req.kind || "").toLowerCase();
+      const value = String(req.value || "").toUpperCase();
+      if (!adGroupId) return json(400, { ok: false, error: "Missing 'adGroupId'" });
+
+      const rows = await search(env, access, customerId,
+        `SELECT ad_group.id, ad_group.name FROM ad_group WHERE ad_group.id = ${adGroupId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Ad group ${adGroupId} not found in ${customerId}` });
+      const agName = rows[0].adGroup?.name;
+
+      resource = "adGroupCriteria";
+      if (kind === "age") {
+        if (!AGE_RANGES.has(value)) return json(400, { ok: false, error: `age value must be one of ${[...AGE_RANGES].join(", ")}` });
+        operation = { create: { adGroup: `customers/${customerId}/adGroups/${adGroupId}`, negative: true, ageRange: { type: value } } };
+        preview = { target: `ad group ${adGroupId} (${agName})`, field: "exclude age range", old: null, new: value };
+      } else if (kind === "gender") {
+        if (!GENDERS.has(value)) return json(400, { ok: false, error: `gender value must be one of ${[...GENDERS].join(", ")}` });
+        operation = { create: { adGroup: `customers/${customerId}/adGroups/${adGroupId}`, negative: true, gender: { type: value } } };
+        preview = { target: `ad group ${adGroupId} (${agName})`, field: "exclude gender", old: null, new: value };
+      } else {
+        return json(400, { ok: false, error: "kind must be 'age' or 'gender'" });
+      }
 
     } else {
       return json(400, { ok: false, error: `Unknown action '${action}'` });

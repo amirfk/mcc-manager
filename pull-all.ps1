@@ -30,6 +30,8 @@ $reads = @(
   @{ name = "locations";       url = "$Base/list-locations?customerId=$CustomerId" },
   @{ name = "conversion-actions"; url = "$Base/list-conversion-actions?customerId=$CustomerId" },
   @{ name = "campaign-goals";     url = "$Base/list-campaign-goals?customerId=$CustomerId" },
+  @{ name = "demographics";       url = "$Base/list-demographics?customerId=$CustomerId" },
+  @{ name = "audiences";          url = "$Base/list-audiences?customerId=$CustomerId" },
   @{ name = "report-campaign"; url = "$Base/report?customerId=$CustomerId&level=campaign&days=30" },
   @{ name = "report-keyword";  url = "$Base/report?customerId=$CustomerId&level=keyword&days=30" },
   @{ name = "report-ad";       url = "$Base/report?customerId=$CustomerId&level=ad&days=30" },

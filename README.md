@@ -26,6 +26,8 @@ tested from a browser address bar — use a client that sends the header.
 | `/.netlify/functions/report` | GET | Performance metrics + derived CPA/ROAS at `?level=campaign\|ad_group\|keyword\|ad` (`&days=7\|14\|30`, optional `&campaignId=`). The core optimization input. |
 | `/.netlify/functions/list-conversion-actions` | GET | Conversion actions and their value settings (`?customerId=`). Explains near-zero conversion value / ROAS. |
 | `/.netlify/functions/list-campaign-goals` | GET | Which conversion-goal categories each campaign bids toward (`?customerId=`), plus account defaults. Cross-reference with conversion actions to see the event behind each campaign. |
+| `/.netlify/functions/list-demographics` | GET | Age-range and gender criteria per ad group (`?customerId=`, optional `&campaignId=`) — targeted/excluded and bid modifier. |
+| `/.netlify/functions/list-audiences` | GET | Audience/interest criteria per ad group (`?customerId=`, optional `&campaignId=`) — in-market/affinity, remarketing lists, custom/combined audiences. |
 | `/.netlify/functions/list-locations` | GET | Location targets/exclusions per campaign with readable names (`?customerId=`, optional `&campaignId=`). |
 | `/.netlify/functions/search-geo` | GET | Resolve a place name to geoTargetConstant id(s) (`?q=`, `&country=`, `&locale=`) for `add_location`. |
 | `/.netlify/functions/manage` | POST | **Write.** The check-then-do management loop. Defaults to a dry run; only mutates when `confirm:true`. Logs every applied change to Supabase. See below. |
@@ -124,6 +126,13 @@ POST /.netlify/functions/manage
 POST /.netlify/functions/manage
 { "action": "set_conversion_value", "customerId": "9427798225",
   "conversionActionId": "7034758458", "value": 200 }
+
+// Exclude an age range or gender from an ad group.
+// kind="age" value: AGE_RANGE_18_24 | _25_34 | _35_44 | _45_54 | _55_64 | _65_UP | _UNDETERMINED
+// kind="gender" value: MALE | FEMALE | UNDETERMINED
+POST /.netlify/functions/manage
+{ "action": "exclude_demographic", "customerId": "9427798225",
+  "adGroupId": "1234567890", "kind": "age", "value": "AGE_RANGE_18_24" }
 
 // Create a PAUSED Search campaign + its budget (atomic). Spends NOTHING until
 // enabled via set_campaign_status. Uses Maximize Conversions.
