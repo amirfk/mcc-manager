@@ -32,6 +32,8 @@ tested from a browser address bar — use a client that sends the header.
 | `/.netlify/functions/search-geo` | GET | Resolve a place name to geoTargetConstant id(s) (`?q=`, `&country=`, `&locale=`) for `add_location`. |
 | `/.netlify/functions/manage` | POST | **Write.** The check-then-do management loop. Defaults to a dry run; only mutates when `confirm:true`. Logs every applied change to Supabase. See below. |
 | `/.netlify/functions/get-audit` | GET | Read the audit history of applied changes (`?limit=`, `?customerId=`). |
+| `/.netlify/functions/snapshot-metrics` | GET | Pulls DAILY (date-segmented) metrics and upserts them into Supabase `metrics_daily` so history accumulates (`?level=`, `?days=`). Run each pull. |
+| `/.netlify/functions/get-metrics-history` | GET | Reads the accumulated daily time-series (`?level=`, `?entityId=`, `?from=`, `?to=`). For trend analysis. |
 
 ## Management engine (`manage`) — the check-then-do loop
 
@@ -54,7 +56,8 @@ must include an `x-mcc-token` header matching `MCC_API_SECRET`, or it returns
    hides a real change. Read the history back via `get-audit`.
 
 **Setup:** run `supabase/audit_log.sql` once in your Supabase project, then set
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Netlify.
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Netlify. For metrics history,
+also run `supabase/metrics_daily.sql` once.
 
 The intended flow: send without `confirm` → review the `preview` → resend the
 identical body with `confirm:true` to apply.

@@ -48,6 +48,15 @@ foreach ($r in $reads) {
     Write-Host ("FAIL {0,-13} : {1}" -f $r.name, $_.Exception.Message)
   }
 }
+# Accumulate DAILY performance history into Supabase (upsert; safe to re-run).
+Write-Host "-- snapshotting daily metrics to history --"
+foreach ($lvl in @("campaign", "ad_group", "keyword", "ad")) {
+  try {
+    $s = Invoke-RestMethod -Uri "$Base/snapshot-metrics?customerId=$CustomerId&level=$lvl&days=30" -Headers $h -ErrorAction Stop
+    Write-Host ("OK   history {0,-9} -> {1} rows upserted" -f $lvl, $s.count)
+  } catch { Write-Host ("FAIL history {0}: {1}" -f $lvl, $_.Exception.Message) }
+}
+
 # Optional: also download extra CSVs (e.g. published Google Sheet tabs) listed
 # in data\sheet-sources.txt, one per line as:  name,https://...&output=csv
 # (Use this only for NON-personal tabs, e.g. monthly revenue totals. Keep raw
