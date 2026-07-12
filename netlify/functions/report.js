@@ -79,9 +79,15 @@ exports.handler = async (event) => {
   if (!level) return json(400, { ok: false, error: `level must be one of ${Object.keys(LEVELS).join(", ")}` });
   const during = RANGE[String(q.days || "30")] || "LAST_30_DAYS";
   const campaignId = digits(q.campaignId);
+  // Optional exact date window (YYYY-MM-DD) for month-to-month reporting.
+  const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+  const from = isDate(q.from) ? q.from : null;
+  const to = isDate(q.to) ? q.to : null;
+  const rangeClause = from && to ? `segments.date BETWEEN '${from}' AND '${to}'` : `segments.date DURING ${during}`;
+  const rangeLabel = from && to ? `${from}..${to}` : during;
 
   const metrics = ["metrics.cost_micros", "metrics.impressions", "metrics.clicks", "metrics.conversions", "metrics.conversions_value"];
-  let gaql = `SELECT ${[...level.fields, ...metrics].join(", ")} FROM ${level.from} WHERE segments.date DURING ${during}`;
+  let gaql = `SELECT ${[...level.fields, ...metrics].join(", ")} FROM ${level.from} WHERE ${rangeClause}`;
   if (campaignId) gaql += ` AND campaign.id = ${campaignId}`;
   gaql += ` ORDER BY metrics.cost_micros DESC`;
 
@@ -116,7 +122,7 @@ exports.handler = async (event) => {
     });
 
     return json(200, {
-      ok: true, version: env.version, customerId, level: levelKey, range: during, count: items.length,
+      ok: true, version: env.version, customerId, level: levelKey, range: rangeLabel, count: items.length,
       totals: {
         cost: Math.round(totCost * 100) / 100, clicks: totClicks, conversions: Math.round(totConv * 100) / 100,
         cost_per_conv: totConv > 0 ? Math.round((totCost / totConv) * 100) / 100 : null,
