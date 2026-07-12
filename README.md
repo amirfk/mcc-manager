@@ -34,6 +34,7 @@ tested from a browser address bar — use a client that sends the header.
 | `/.netlify/functions/get-audit` | GET | Read the audit history of applied changes (`?limit=`, `?customerId=`). |
 | `/.netlify/functions/snapshot-metrics` | GET | Pulls DAILY (date-segmented) metrics and upserts them into Supabase `metrics_daily` so history accumulates (`?level=`, `?days=`). Run each pull. |
 | `/.netlify/functions/get-metrics-history` | GET | Reads the accumulated daily time-series (`?level=`, `?entityId=`, `?from=`, `?to=`). For trend analysis. |
+| `scheduled-snapshot` | cron | Runs daily (06:00 UTC, set in `netlify.toml`). Upserts the last 7 days of daily metrics into `metrics_daily` automatically — history fills itself. Not HTTP-facing. Accounts via `SNAPSHOT_CUSTOMER_IDS` (default Kings Dental). |
 
 ## Management engine (`manage`) — the check-then-do loop
 

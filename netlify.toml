@@ -3,3 +3,7 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Daily automatic metrics snapshot into Supabase (06:00 UTC). No client needed.
+[functions."scheduled-snapshot"]
+  schedule = "0 6 * * *"
