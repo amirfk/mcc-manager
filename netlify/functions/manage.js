@@ -508,6 +508,32 @@ exports.handler = async (event) => {
       operation = { updateMask: "value_settings.default_value,value_settings.always_use_default_value", update: { resourceName: `customers/${customerId}/conversionActions/${conversionActionId}`, valueSettings: { defaultValue: value, alwaysUseDefaultValue: alwaysUse } } };
       preview = { target: `conversion action ${conversionActionId} (${ca.name})`, field: "default value", old: oldVal, new: value };
 
+    } else if (action === "set_conversion_primary") {
+      // Primary  = counts as a "conversion" AND feeds Smart Bidding.
+      // Secondary = still recorded and reportable, but does NOT drive bidding.
+      // Demoting junk (map taps, website-visit pings, duplicate booking actions)
+      // is usually the single highest-leverage fix in a polluted account.
+      const conversionActionId = digits(req.conversionActionId);
+      if (!conversionActionId) return json(400, { ok: false, error: "Missing 'conversionActionId'" });
+      if (typeof req.primary !== "boolean") return json(400, { ok: false, error: "'primary' must be boolean: true = Primary (feeds bidding), false = Secondary" });
+      const primary = req.primary;
+
+      const rows = await search(env, access, customerId,
+        `SELECT conversion_action.id, conversion_action.name, conversion_action.category, conversion_action.primary_for_goal FROM conversion_action WHERE conversion_action.id = ${conversionActionId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Conversion action ${conversionActionId} not found in ${customerId}` });
+      const ca = rows[0].conversionAction;
+      const oldPrimary = ca.primaryForGoal ?? null;
+
+      resource = "conversionActions";
+      operation = { updateMask: "primary_for_goal", update: { resourceName: `customers/${customerId}/conversionActions/${conversionActionId}`, primaryForGoal: primary } };
+      preview = {
+        target: `conversion action ${conversionActionId} (${ca.name})`,
+        field: "primary_for_goal",
+        old: oldPrimary === true ? "PRIMARY" : "secondary",
+        new: primary ? "PRIMARY" : "secondary",
+        category: ca.category || null,
+      };
+
     } else if (action === "exclude_demographic") {
       const adGroupId = digits(req.adGroupId);
       const kind = String(req.kind || "").toLowerCase();
