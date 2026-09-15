@@ -21,6 +21,9 @@ const ALLOWED_STATUS = new Set(["PAUSED", "ENABLED", "REMOVED"]);
 const MATCH_TYPES = new Set(["EXACT", "PHRASE", "BROAD"]);
 const AGE_RANGES = new Set(["AGE_RANGE_18_24", "AGE_RANGE_25_34", "AGE_RANGE_35_44", "AGE_RANGE_45_54", "AGE_RANGE_55_64", "AGE_RANGE_65_UP", "AGE_RANGE_UNDETERMINED"]);
 const GENDERS = new Set(["MALE", "FEMALE", "UNDETERMINED"]);
+// Conversion goal (category, origin) pairs — used by set_campaign_conversion_goal.
+const GOAL_CATEGORIES = new Set(["PURCHASE", "SIGNUP", "LEAD", "PAGE_VIEW", "SUBSCRIBE_PAID", "PHONE_CALL_LEAD", "IMPORTED_LEAD", "SUBMIT_LEAD_FORM", "BOOK_APPOINTMENT", "REQUEST_QUOTE", "GET_DIRECTIONS", "OUTBOUND_CLICK", "CONTACT", "ENGAGEMENT", "STORE_VISIT", "STORE_SALE", "QUALIFIED_LEAD", "CONVERTED_LEAD", "DOWNLOAD", "OTHER", "DEFAULT"]);
+const GOAL_ORIGINS = new Set(["WEBSITE", "GOOGLE_HOSTED", "APP", "CALL_FROM_ADS", "STORE", "YOUTUBE_HOSTED"]);
 
 const mask = (v) => {
   if (!v) return { present: false };
@@ -532,6 +535,40 @@ exports.handler = async (event) => {
         old: oldPrimary === true ? "PRIMARY" : "secondary",
         new: primary ? "PRIMARY" : "secondary",
         category: ca.category || null,
+      };
+
+    } else if (action === "set_campaign_conversion_goal") {
+      // The escape hatch for Google-hosted conversion actions (Local actions -
+      // Directions / Menu views / Website visits / Other engagements). Those
+      // actions are READ-ONLY over the API (MUTATE_NOT_ALLOWED), so you cannot
+      // demote them individually. You CAN, however, switch their whole
+      // (category, origin) pair off for bidding on a given campaign - which
+      // achieves the same thing: still recorded, no longer drives bids.
+      //
+      // Setting any campaign conversion goal makes the campaign use
+      // CAMPAIGN-SPECIFIC goals instead of the account defaults.
+      const campaignId = digits(req.campaignId);
+      const category = String(req.category || "").toUpperCase();
+      const origin = String(req.origin || "").toUpperCase();
+      if (!campaignId) return json(400, { ok: false, error: "Missing 'campaignId'" });
+      if (!GOAL_CATEGORIES.has(category)) return json(400, { ok: false, error: `category must be one of ${[...GOAL_CATEGORIES].join(", ")}` });
+      if (!GOAL_ORIGINS.has(origin)) return json(400, { ok: false, error: `origin must be one of ${[...GOAL_ORIGINS].join(", ")}` });
+      if (typeof req.biddable !== "boolean") return json(400, { ok: false, error: "'biddable' must be boolean: true = feeds bidding, false = recorded only" });
+
+      const rows = await search(env, access, customerId,
+        `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.id = ${campaignId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Campaign ${campaignId} not found in ${customerId}` });
+
+      resource = "campaignConversionGoals";
+      operation = {
+        updateMask: "biddable",
+        update: { resourceName: `customers/${customerId}/campaignConversionGoals/${campaignId}~${category}~${origin}`, biddable: req.biddable },
+      };
+      preview = {
+        target: `campaign ${campaignId} (${rows[0].campaign?.name})`,
+        field: `goal ${category}/${origin} biddable`,
+        old: null,
+        new: req.biddable ? "BIDDABLE" : "not biddable (recorded only)",
       };
 
     } else if (action === "exclude_demographic") {
