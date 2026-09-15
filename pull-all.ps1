@@ -35,6 +35,10 @@ $reads = @(
   @{ name = "report-campaign"; url = "$Base/report?customerId=$CustomerId&level=campaign&days=30" },
   @{ name = "report-keyword";  url = "$Base/report?customerId=$CustomerId&level=keyword&days=30" },
   @{ name = "report-ad";       url = "$Base/report?customerId=$CustomerId&level=ad&days=30" },
+  # Per-conversion-action truth: what actually fired, at what real value, and
+  # whether it is PRIMARY (feeding bidding). This is how we verify the ad-pilot
+  # offline uploads landed and catch junk goals inflating the conversion count.
+  @{ name = "report-conversions"; url = "$Base/report-conversions?customerId=$CustomerId&during=LAST_30_DAYS&byCampaign=1" },
   @{ name = "audit";           url = "$Base/get-audit?limit=200" }
 )
 
