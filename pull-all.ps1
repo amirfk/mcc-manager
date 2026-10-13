@@ -3,20 +3,27 @@
 # in this file — the token is passed at runtime.
 #
 # Usage:
-#   .\pull-all.ps1 -Token "your-secret"                       # defaults to Kings Dental
-#   .\pull-all.ps1 -Token "your-secret" -CustomerId 4594075026
-#   (or set $env:MCC_API_SECRET once, then just .\pull-all.ps1)
+#   .\pull-all.ps1                                             # Kings Dental -> data\
+#   .\pull-all.ps1 -CustomerId 4594075026 -OutDir data\roomvu  # Roomvu -> data\roomvu\
+#   (set $env:MCC_API_SECRET once per PowerShell session; never pass it in chat)
+#
+# ALWAYS give each account its own -OutDir. The file names are fixed, so two
+# accounts pulled into the same folder silently overwrite each other.
+# Keep OutDir inside data\ - that folder is gitignored (account data never committed).
 
 param(
   [string]$Token = $env:MCC_API_SECRET,
   [string]$CustomerId = "9427798225",
+  [string]$OutDir = "data",
+  [switch]$NoHistory,   # skip the Supabase metrics_daily snapshot (read-only pull)
   [string]$Base = "https://mcc-manager.netlify.app/.netlify/functions"
 )
 
 if (-not $Token) { Write-Error "Provide -Token or set `$env:MCC_API_SECRET first."; exit 1 }
 
 $h = @{ "x-mcc-token" = $Token }
-$out = Join-Path $PSScriptRoot "data"
+$out = Join-Path $PSScriptRoot $OutDir
+Write-Host ("Account {0} -> {1}" -f $CustomerId, $out)
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
 $reads = @(
@@ -39,7 +46,11 @@ $reads = @(
   # whether it is PRIMARY (feeding bidding). This is how we verify the ad-pilot
   # offline uploads landed and catch junk goals inflating the conversion count.
   @{ name = "report-conversions"; url = "$Base/report-conversions?customerId=$CustomerId&during=LAST_30_DAYS&byCampaign=1" },
-  @{ name = "audit";           url = "$Base/get-audit?limit=200" }
+  # Impression share (campaign) + device + network + geo + auction insights, one call.
+  @{ name = "report-splits";      url = "$Base/report-splits?customerId=$CustomerId&type=all&days=30" },
+  # Keyword-level impression share: which keywords lose auctions to rank.
+  @{ name = "report-is-keyword";  url = "$Base/report-splits?customerId=$CustomerId&type=impression_share&level=keyword&days=30" },
+  @{ name = "audit";           url = "$Base/get-audit?limit=200&customerId=$CustomerId" }
 )
 
 foreach ($r in $reads) {
@@ -47,18 +58,20 @@ foreach ($r in $reads) {
     $resp = Invoke-RestMethod -Uri $r.url -Headers $h -ErrorAction Stop
     $path = Join-Path $out ("{0}.json" -f $r.name)
     $resp | ConvertTo-Json -Depth 20 | Out-File -FilePath $path -Encoding utf8
-    Write-Host ("OK   {0,-13} -> data\{0}.json" -f $r.name)
+    Write-Host ("OK   {0,-13} -> {1}\{0}.json" -f $r.name, $OutDir)
   } catch {
     Write-Host ("FAIL {0,-13} : {1}" -f $r.name, $_.Exception.Message)
   }
 }
 # Accumulate DAILY performance history into Supabase (upsert; safe to re-run).
+if ($NoHistory) { Write-Host "-- history snapshot skipped (-NoHistory) --" } else {
 Write-Host "-- snapshotting daily metrics to history --"
 foreach ($lvl in @("campaign", "ad_group", "keyword", "ad")) {
   try {
     $s = Invoke-RestMethod -Uri "$Base/snapshot-metrics?customerId=$CustomerId&level=$lvl&days=30" -Headers $h -ErrorAction Stop
     Write-Host ("OK   history {0,-9} -> {1} rows upserted" -f $lvl, $s.count)
   } catch { Write-Host ("FAIL history {0}: {1}" -f $lvl, $_.Exception.Message) }
+}
 }
 
 # Optional: also download extra CSVs (e.g. published Google Sheet tabs) listed
