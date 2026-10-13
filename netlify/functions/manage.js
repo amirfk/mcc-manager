@@ -23,6 +23,7 @@ const AGE_RANGES = new Set(["AGE_RANGE_18_24", "AGE_RANGE_25_34", "AGE_RANGE_35_
 const GENDERS = new Set(["MALE", "FEMALE", "UNDETERMINED"]);
 // Conversion goal (category, origin) pairs — used by set_campaign_conversion_goal.
 const GOAL_CATEGORIES = new Set(["PURCHASE", "SIGNUP", "LEAD", "PAGE_VIEW", "SUBSCRIBE_PAID", "PHONE_CALL_LEAD", "IMPORTED_LEAD", "SUBMIT_LEAD_FORM", "BOOK_APPOINTMENT", "REQUEST_QUOTE", "GET_DIRECTIONS", "OUTBOUND_CLICK", "CONTACT", "ENGAGEMENT", "STORE_VISIT", "STORE_SALE", "QUALIFIED_LEAD", "CONVERTED_LEAD", "DOWNLOAD", "OTHER", "DEFAULT"]);
+const GEO_TYPES = new Set(["PRESENCE", "PRESENCE_OR_INTEREST"]);
 const GOAL_ORIGINS = new Set(["WEBSITE", "GOOGLE_HOSTED", "APP", "CALL_FROM_ADS", "STORE", "YOUTUBE_HOSTED"]);
 
 const mask = (v) => {
@@ -217,6 +218,71 @@ exports.handler = async (event) => {
       operation = { updateMask: "status", update: { resourceName: `customers/${customerId}/campaigns/${campaignId}`, status } };
       preview = { target: `campaign ${campaignId} (${current.name})`, field: "status", old: current.status, new: status };
 
+    } else if (action === "set_campaign_network") {
+      // Search / Display network opt-ins for a SEARCH campaign.
+      //   searchPartners: true|false -> Google search partner sites
+      //   display:        true|false -> Display Network expansion (optional)
+      // Performance Max and other automated types manage their own networks and
+      // are refused. Only the flags you pass are changed.
+      const campaignId = digits(req.campaignId);
+      if (!campaignId) return json(400, { ok: false, error: "Missing 'campaignId'" });
+      const hasSP = typeof req.searchPartners === "boolean";
+      const hasDN = typeof req.display === "boolean";
+      if (!hasSP && !hasDN) return json(400, { ok: false, error: "Pass searchPartners and/or display as booleans" });
+
+      const rows = await search(env, access, customerId,
+        `SELECT campaign.id, campaign.name, campaign.advertising_channel_type, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network FROM campaign WHERE campaign.id = ${campaignId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Campaign ${campaignId} not found in ${customerId}` });
+      const c = rows[0].campaign;
+      if (c.advertisingChannelType !== "SEARCH") {
+        return json(400, { ok: false, error: `Network settings are only editable on SEARCH campaigns; ${c.name} is ${c.advertisingChannelType}` });
+      }
+      const ns = c.networkSettings || {};
+      const mask = [], upd = {};
+      if (hasSP) { mask.push("network_settings.target_search_network"); upd.targetSearchNetwork = req.searchPartners; }
+      if (hasDN) { mask.push("network_settings.target_content_network"); upd.targetContentNetwork = req.display; }
+
+      resource = "campaigns";
+      operation = { updateMask: mask.join(","), update: { resourceName: `customers/${customerId}/campaigns/${campaignId}`, networkSettings: upd } };
+      preview = {
+        target: `campaign ${campaignId} (${c.name})`,
+        field: mask.map((m) => m.replace("network_settings.", "")).join(", "),
+        old: { search_partners: ns.targetSearchNetwork ?? null, display: ns.targetContentNetwork ?? null },
+        new: { search_partners: hasSP ? req.searchPartners : (ns.targetSearchNetwork ?? null), display: hasDN ? req.display : (ns.targetContentNetwork ?? null) },
+      };
+
+    } else if (action === "set_geo_target_type") {
+      // Location option. PRESENCE = only people physically in (or regularly in)
+      // the targeted area. PRESENCE_OR_INTEREST = also people elsewhere who
+      // search about the area (Google's default - the usual source of
+      // out-of-area spend for a local business).
+      //   positive: PRESENCE | PRESENCE_OR_INTEREST   (required)
+      //   negative: PRESENCE | PRESENCE_OR_INTEREST   (optional; how exclusions apply)
+      const campaignId = digits(req.campaignId);
+      const positive = String(req.positive || "").toUpperCase();
+      const negative = req.negative ? String(req.negative).toUpperCase() : null;
+      if (!campaignId) return json(400, { ok: false, error: "Missing 'campaignId'" });
+      if (!GEO_TYPES.has(positive)) return json(400, { ok: false, error: `positive must be one of ${[...GEO_TYPES].join(", ")}` });
+      if (negative && !GEO_TYPES.has(negative)) return json(400, { ok: false, error: `negative must be one of ${[...GEO_TYPES].join(", ")}` });
+
+      const rows = await search(env, access, customerId,
+        `SELECT campaign.id, campaign.name, campaign.geo_target_type_setting.positive_geo_target_type, campaign.geo_target_type_setting.negative_geo_target_type FROM campaign WHERE campaign.id = ${campaignId}`);
+      if (!rows.length) return json(404, { ok: false, error: `Campaign ${campaignId} not found in ${customerId}` });
+      const c = rows[0].campaign;
+      const gs = c.geoTargetTypeSetting || {};
+      const mask = ["geo_target_type_setting.positive_geo_target_type"];
+      const upd = { positiveGeoTargetType: positive };
+      if (negative) { mask.push("geo_target_type_setting.negative_geo_target_type"); upd.negativeGeoTargetType = negative; }
+
+      resource = "campaigns";
+      operation = { updateMask: mask.join(","), update: { resourceName: `customers/${customerId}/campaigns/${campaignId}`, geoTargetTypeSetting: upd } };
+      preview = {
+        target: `campaign ${campaignId} (${c.name})`,
+        field: "location option",
+        old: { positive: gs.positiveGeoTargetType ?? null, negative: gs.negativeGeoTargetType ?? null },
+        new: { positive, negative: negative || (gs.negativeGeoTargetType ?? null) },
+      };
+
     } else if (action === "update_campaign_budget") {
       const budgetId = digits(req.budgetId);
       const amount = Number(req.amount);
@@ -388,7 +454,12 @@ exports.handler = async (event) => {
           name, status: "PAUSED", advertisingChannelType: "SEARCH",
           campaignBudget: budgetRes,
           maximizeConversions: {},
-          networkSettings: { targetGoogleSearch: true, targetSearchNetwork: true, targetContentNetwork: false, targetPartnerSearchNetwork: false },
+          // Search Partners OFF by default: a campaign created with it ON put 98% of
+          // its spend on partner sites at ~1/3 of Google Search's conversion rate.
+          // Opt in explicitly with "searchPartners": true. Location option
+          // defaults to PRESENCE (people actually in the target area).
+          networkSettings: { targetGoogleSearch: true, targetSearchNetwork: req.searchPartners === true, targetContentNetwork: false, targetPartnerSearchNetwork: false },
+          geoTargetTypeSetting: { positiveGeoTargetType: "PRESENCE" },
           containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
         } } },
       ];

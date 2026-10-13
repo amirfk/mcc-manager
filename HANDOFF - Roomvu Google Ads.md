@@ -194,11 +194,10 @@ last-30-days where time-bound.
   bid/ad rank/quality; more budget won't help, better ads/landing page/bids will.
 - Only add budget to a campaign that is **both** budget-limited **and** efficient on a clean
   conversion signal (§7.1).
-- Geo: spend tagged `AREA_OF_INTEREST` from outside your market is usually leakage. The fix
-  is the campaign's location option "Presence: people in or regularly in your locations" —
-  **not settable through the harness yet**, change it in the UI.
-- Network: Search Partners with spend and no conversions → turn partners off in the UI
-  (not settable through the harness yet).
+- Geo: spend tagged `AREA_OF_INTEREST` from outside your market is usually leakage. Fix with
+  `set_geo_target_type positive=PRESENCE`. `list-campaigns` now shows `location_option`.
+- Network: Search Partners spend with a poor conversion rate → `set_campaign_network
+  searchPartners=false`. `list-campaigns` now shows `search_partners` / `display_network`.
 - **Auction insights** are restricted by Google to allowlisted developer tokens. Expect
   `available:false` with the UI workaround; if it ever returns data, the token was approved.
   Workaround: UI → Insights and reports → Auction insights → download CSV →
@@ -241,6 +240,8 @@ run; add `"confirm": true` to apply. Amounts are in **account currency (CAD)**.
 | `set_conversion_value` | `conversionActionId`, `value`, `alwaysUseDefaultValue` | Call-type actions force `alwaysUseDefaultValue=true` |
 | `set_conversion_primary` | `conversionActionId`, `primary` (bool) | Primary = feeds bidding. **Fails on GOOGLE_HOSTED actions** (lesson 9) |
 | `set_campaign_conversion_goal` | `campaignId`, `category`, `origin`, `biddable` (bool) | Switch a goal category on/off for bidding per campaign. Works where the one above can't |
+| `set_campaign_network` | `campaignId`, `searchPartners` (bool) and/or `display` (bool) | Search Partners / Display opt-in. **SEARCH campaigns only** (PMax refused) |
+| `set_geo_target_type` | `campaignId`, `positive` = `PRESENCE`\|`PRESENCE_OR_INTEREST`, optional `negative` | Location option. `PRESENCE` = only people actually in the area. Google's default is `PRESENCE_OR_INTEREST` |
 
 Example:
 ```json
@@ -251,8 +252,8 @@ Example:
 **Not supported by the harness** (do in the Google Ads UI, or build first): editing an
 existing ad's text or URL (workaround: create a replacement, then remove the old), account
 negative-keyword lists, PMax negatives, sitelinks/assets, audience *adds*, bid adjustments
-(incl. device bid adjustments), ad schedules, network settings (Search Partners on/off),
-location presence/interest option, offline conversion upload, enhanced conversions,
+(incl. device bid adjustments), ad schedules, auto-apply recommendation settings,
+offline conversion upload, enhanced conversions,
 Demand Gen/Display/Video creation. The splits in `report-splits` are **read-only** — they
 tell you what to change; several of those changes are UI-only for now.
 
@@ -459,6 +460,18 @@ Name scripts `optimise-roomvu-NN.ps1` so they can never be confused with the oth
 16. Ad-group objects use the field `name` (not `ad_group_name`).
 17. An "Unknown action" or 404 right after a push means the deploy hasn't finished — wait and retry.
 18. `set_ad_status` preview can show `old=ENABLED` even when it was paused; trust a re-pull.
+    Apply responses don't echo the `old -> new` preview — blank arrows on `-Confirm` are normal.
+19a. **A negative that conflicts with one of your own enabled keywords gets removed.** On the
+    previous account `nhs` was added three times, all "applied", and kept disappearing — the
+    account was *bidding on* "periodontist nhs" etc., and Google's conflicting-negatives
+    recommendation stripped the negative. Before adding a negative, check `keywords.json` for
+    enabled keywords containing it and pause those first. Re-pull to confirm negatives stuck.
+19b. **New campaigns: Search Partners are OFF and location option is PRESENCE by default**
+    (`create_campaign`). The old default had partners ON — a new campaign put 98% of its spend
+    on partner sites at a third of Google Search's conversion rate. Pass `searchPartners:true`
+    only on purpose.
+19c. **Copy negatives to every new campaign.** Negatives are per campaign; a new campaign
+    starts with none and immediately buys all the junk the old ones had blocked.
 
 **PowerShell (user runs Windows PowerShell 5.1)**
 19. `Out-File` without `-Encoding utf8` writes **UTF-16**. JSON readers then fail. Always add

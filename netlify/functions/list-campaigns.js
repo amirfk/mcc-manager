@@ -19,6 +19,10 @@ const GAQL = `
     campaign.target_roas.target_roas,
     campaign.maximize_conversions.target_cpa_micros,
     campaign.maximize_conversion_value.target_roas,
+    campaign.network_settings.target_search_network,
+    campaign.network_settings.target_content_network,
+    campaign.geo_target_type_setting.positive_geo_target_type,
+    campaign.geo_target_type_setting.negative_geo_target_type,
     campaign_budget.id,
     campaign_budget.amount_micros
   FROM campaign
@@ -90,6 +94,10 @@ exports.handler = async (event) => {
         target_roas: troas != null ? Number(troas) : null,
         budget_id: b.id || null,
         daily_budget: b.amountMicros ? Number(b.amountMicros) / 1e6 : null,
+        search_partners: c.networkSettings?.targetSearchNetwork ?? null,   // Google search partner sites
+        display_network: c.networkSettings?.targetContentNetwork ?? null,
+        location_option: c.geoTargetTypeSetting?.positiveGeoTargetType ?? null, // PRESENCE | PRESENCE_OR_INTEREST
+        location_option_exclusions: c.geoTargetTypeSetting?.negativeGeoTargetType ?? null,
       };
     });
 

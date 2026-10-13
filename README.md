@@ -73,6 +73,18 @@ POST /.netlify/functions/manage
 { "action": "set_campaign_status", "customerId": "9427798225",
   "campaignId": "1234567890", "status": "PAUSED" }   // ENABLED | PAUSED | REMOVED
 
+// Search Partners / Display opt-in on a SEARCH campaign (PMax refused)
+POST /.netlify/functions/manage
+{ "action": "set_campaign_network", "customerId": "9427798225",
+  "campaignId": "1234567890", "searchPartners": false }
+
+// Location option: PRESENCE (people in the area) | PRESENCE_OR_INTEREST (Google default)
+POST /.netlify/functions/manage
+{ "action": "set_geo_target_type", "customerId": "9427798225",
+  "campaignId": "1234567890", "positive": "PRESENCE" }
+
+// create_campaign defaults: Search Partners OFF, location option PRESENCE.
+
 // Change a daily budget (amount in DOLLARS; converted to micros internally)
 POST /.netlify/functions/manage
 { "action": "update_campaign_budget", "customerId": "9427798225",
